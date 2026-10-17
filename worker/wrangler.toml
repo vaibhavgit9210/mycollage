@@ -1,0 +1,16 @@
+name = "mycollage"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[[durable_objects.bindings]]
+name = "COLLAGE"
+class_name = "Collage"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Collage"]
+
+# Secret (set via `npx wrangler secret put ADMIN_KEY`, never in this file):
+#   ADMIN_KEY  bearer key for the studio: uploads, publish, reading the project back.
+#              Value lives in ../.admin-key (gitignored). Unset means studio calls get 500.
+# Local dev reads it from .dev.vars (gitignored).
