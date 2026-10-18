@@ -65,6 +65,9 @@ push BOTH `main` and `main:gh-pages`). The worker deploys separately: `cd worker
   studio-only `project` (never in the public `/live`).
 - The first `GET /drafts` turns a pre-drafts live project into draft #1 (`adoptProject`, once, flag
   `draftsInit` in kv).
+- Draft saves compare docs by `canon()` (keys sorted): the studio's `migrate()` reorders keys on load,
+  and counting that as an edit once marked the live draft "edited since" just by opening it. `GET /drafts`
+  also heals `project.draftRev` when the live draft's content still equals the published doc.
 - Cloudflare's edge answers `Python-urllib` user agents with error 1010: scripts must send a browser UA.
 - `tests/api_test.py` publishes throwaway collages, so it asserts a localhost base. Never point it at production.
 

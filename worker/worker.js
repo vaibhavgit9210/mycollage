@@ -106,6 +106,13 @@ async function readJSON(req, max) {
 }
 
 const dim = n => Number.isInteger(n) && n > 0 && n <= 20000;
+// JSON with object keys sorted: the studio may reorder a doc's keys when it loads it, which
+// isn't an edit.
+function canon(v) {
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+}
 const render = x => x && typeof x === 'object' && HASH.test(x.id) && dim(x.w) && dim(x.h)
   && Number.isSafeInteger(x.bytes) && x.bytes > 0;
 const pick = x => ({ id: x.id, w: x.w, h: x.h, bytes: x.bytes });
@@ -245,6 +252,13 @@ export class Collage extends DurableObject {
 
   listDrafts() {
     this.adoptProject();
+    // A live draft whose content still matches what was published isn't "edited since",
+    // whatever its rev says (key order, or edits that were undone).
+    const proj = this.get('project');
+    if (proj && proj.draft) {
+      const d = this.one('SELECT rev, doc FROM drafts WHERE id = ?', proj.draft);
+      if (d && d.rev !== proj.draftRev && canon(JSON.parse(d.doc)) === canon(proj.doc)) this.set('project', { ...proj, draftRev: d.rev });
+    }
     const drafts = this.sql.exec('SELECT id, rev, at, title, preview, doc FROM drafts ORDER BY at DESC').toArray().map(r => {
       let images = [];
       try { images = Object.keys(JSON.parse(r.doc).images || {}); } catch { /* skip */ }
@@ -271,7 +285,7 @@ export class Collage extends DurableObject {
     if (missing.length) return json({ error: 'missing', missing }, 409);
     const text = JSON.stringify(doc), title = clean(doc.title ?? '').slice(0, 120), now = Date.now();
     const cur = this.one('SELECT rev, at, doc FROM drafts WHERE id = ?', id);
-    if (cur && cur.doc === text) {          // nothing new: maybe a fresher preview
+    if (cur && (cur.doc === text || canon(JSON.parse(cur.doc)) === canon(doc))) {   // nothing new: maybe a fresher preview
       if (preview) this.sql.exec('UPDATE drafts SET preview = ? WHERE id = ?', preview, id);
       return json({ rev: cur.rev, at: cur.at });
     }

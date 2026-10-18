@@ -135,6 +135,10 @@ s, h, b = req('PUT', '/drafts/beach0001', {'base': 1, 'doc': {**dA, 'bg': '#111'
 check('save at the current rev', s == 200 and json.loads(b)['rev'] == 2, b)
 s, h, b = req('PUT', '/drafts/beach0001', {'base': 1, 'doc': {**dA, 'bg': '#222'}})
 check('save from a stale rev 409 with the current rev', s == 409 and json.loads(b)['rev'] == 2, b)
+reordered = json.loads(json.dumps({**dA, 'bg': '#111'}))
+reordered = {k: reordered[k] for k in reversed(list(reordered))}
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 2, 'doc': reordered})
+check('same doc with its keys reordered keeps the rev', s == 200 and json.loads(b)['rev'] == 2, b)
 check('bad draft id 404', req('GET', '/drafts/x')[0] == 404)
 check('bad doc 400', req('PUT', '/drafts/beach0002', {'base': 0, 'doc': [1]})[0] == 400)
 check('bad preview ignored', req('PUT', '/drafts/beach0002', {'base': 0, 'doc': dA, 'preview': 'javascript:1'})[0] == 201
@@ -147,6 +151,9 @@ s, h, b = req('PUT', '/publish', {'title': 'Beach', 'W': 1000, 'H': 1000, 'lqip'
 check('publish a draft', s == 200, b)
 d1 = json.loads(req('GET', '/drafts')[2])
 check('live points at the published draft', d1['live']['draft'] == 'beach0001' and d1['live']['draftRev'] == 2, d1['live'])
+req('PUT', '/drafts/beach0001', {'base': 2, 'doc': {**dA, 'bg': '#333'}})          # rev 3: an edit
+req('PUT', '/drafts/beach0001', {'base': 3, 'doc': {**dA, 'bg': '#111'}})          # rev 4: undone
+check('an edit that was undone is not "edited since"', json.loads(req('GET', '/drafts')[2])['live']['draftRev'] == 4)
 check('photos used by other drafts survive a publish', json.loads(req('POST', '/have', {'ids': [H(big), H(other)]})[2])['missing'] == [])
 check('live project not public', 'draft' not in json.loads(req('GET', '/live', key=None)[2]))
 # delete: a photo nothing uses any more is swept
