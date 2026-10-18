@@ -35,7 +35,9 @@ async function compare(page, name) {
   const page = await browser.newPage();
   L.wire(page, 'studio');
   await page.goto(L.STUDIO + '#k=dev-local-key');
-  await page.waitForFunction(() => window.__studio && document.querySelector('#lock').hidden, {timeout: 15000});
+  await page.waitForFunction(() => window.__studio && __studio.draft && document.querySelector('#lock').hidden, {timeout: 15000});
+  await page.evaluate(() => __studio.newDraft());           // a device opens the latest draft: start a clean one
+  await page.waitForFunction(() => !Object.keys(__studio.doc.images).length, {timeout: 15000});
   await page.evaluate(() => __studio.setAspect('1:1'));
   await (await page.$('#fileIn')).uploadFile(...['a-sunset-4x3.jpg', 'b-forest-3x4.jpg', 'c-sea-1x1.jpg', 'f-rose-3x2.jpg', 'g-star-alpha.png'].map(f => L.FIX + '/' + f));
   await page.waitForFunction(() => Object.keys(__studio.doc.images).length === 5, {timeout: 30000});

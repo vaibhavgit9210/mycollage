@@ -20,7 +20,16 @@
 //                        Every render and every photo in doc.images must be stored first
 //                        (409 {missing} otherwise). Afterwards renders older than the
 //                        previous deploy and photos no longer in doc.images are deleted.
-//   GET  /project        {id, at, doc} behind the live collage, or {none:true}
+//   GET  /project        {id, at, doc, draft, draftRev} behind the live collage, or {none:true}
+//   GET  /drafts         {drafts:[{id, rev, at, title, preview, images}], live:{id, at, draft, draftRev}|null}
+//                        Every collage being worked on, shared by every device that has the key.
+//                        The first call turns an existing live project into draft #1.
+//   GET  /drafts/<id>    {id, rev, at, title, doc}
+//   PUT  /drafts/<id>    {base, doc, preview?} -> {rev, at}. base 0 creates. 409 {rev} when base is
+//                        stale (saved elsewhere meanwhile), 409 {missing} until every photo in
+//                        doc.images is stored. The same doc again only refreshes the preview.
+//   DELETE /drafts/<id>  {ok}; photos that no draft and not the live project use are deleted.
+//   PUT /publish also takes {draft, draftRev}: which draft, at which rev, is now live.
 //
 // Source photos are never public: the live page only ever sees the flattened renders,
 // so whatever a crop hides stays hidden.
@@ -35,7 +44,9 @@ const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
 const PUBLIC = /^\/(live|og\.jpg|r\/[0-9a-f]{64})$/;
 const HASH = /^[0-9a-f]{64}$/;
 const CHUNK = 1 << 20;
-const MAX_IMG = 24 << 20, MAX_BODY = 2 << 20;
+const MAX_IMG = 24 << 20, MAX_BODY = 2 << 20, MAX_DRAFT = 1536 << 10;
+const DRAFT = /^[A-Za-z0-9_-]{8,40}$/;
+const PREVIEW = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const MAGIC = {
   'image/jpeg': b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
@@ -46,7 +57,7 @@ const MAGIC = {
 function corsHeaders(req) {
   const origin = req.headers.get('Origin') || '';
   const h = {
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
@@ -108,7 +119,10 @@ export class Collage extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS chunks(
       kind TEXT, id TEXT, n INTEGER, data BLOB, PRIMARY KEY(kind, id, n))`);
     this.sql.exec('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS drafts(
+      id TEXT PRIMARY KEY, rev INTEGER NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, preview TEXT, doc TEXT NOT NULL)`);
   }
+  one(q, ...args) { return this.sql.exec(q, ...args).toArray()[0] || null; }
   get(k) {
     const r = this.sql.exec('SELECT v FROM kv WHERE k = ?', k).toArray()[0];
     return r ? JSON.parse(r.v) : null;
@@ -184,14 +198,99 @@ export class Collage extends DurableObject {
       full: pick(b.full), preview: pick(b.preview), og: pick(b.og), lqip: b.lqip,
     };
     const keepR = new Set([live, prev].filter(Boolean).flatMap(l => [l.full.id, l.preview.id, l.og.id]));
-    const keepSrc = new Set(photos);
+    const keepSrc = this.photosInUse(photos, false);
+    const draft = typeof b.draft === 'string' && DRAFT.test(b.draft) ? b.draft : null;
+    const draftRev = draft && Number.isSafeInteger(b.draftRev) ? b.draftRev : null;
     this.ctx.storage.transactionSync(() => {
       this.set('live', live);
-      this.set('project', { id: live.id, at: live.at, doc });
+      this.set('project', { id: live.id, at: live.at, doc, draft, draftRev });
       for (const { kind, id } of this.sql.exec('SELECT kind, id FROM blobs').toArray())
         if (kind === 'r' ? !keepR.has(id) : !keepSrc.has(id)) this.drop(kind, id);
     });
     return json({ id: live.id, at: live.at });
+  }
+
+  // Photos still needed: those of every draft, `extra`, and (unless a publish is replacing
+  // it) the live project's.
+  photosInUse(extra = [], withProject = true) {
+    const keep = new Set(extra);
+    const proj = withProject && this.get('project');
+    if (proj && proj.doc && proj.doc.images) for (const id of Object.keys(proj.doc.images)) keep.add(id);
+    for (const r of this.sql.exec('SELECT doc FROM drafts')) {
+      try { for (const id of Object.keys(JSON.parse(r.doc).images || {})) keep.add(id); } catch { /* skip a broken row */ }
+    }
+    return keep;
+  }
+  sweepPhotos() {
+    const keep = this.photosInUse();
+    this.ctx.storage.transactionSync(() => {
+      for (const { id } of this.sql.exec("SELECT id FROM blobs WHERE kind = 'src'").toArray()) if (!keep.has(id)) this.drop('src', id);
+    });
+  }
+
+  // Before drafts existed there was one project per deploy: that becomes draft #1, once.
+  adoptProject() {
+    if (this.get('draftsInit')) return;
+    const proj = this.get('project'), live = this.get('live');
+    this.ctx.storage.transactionSync(() => {
+      if (proj && proj.doc && !this.one('SELECT 1 FROM drafts LIMIT 1')) {
+        const id = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+        this.sql.exec('INSERT INTO drafts(id, rev, at, title, preview, doc) VALUES(?, 1, ?, ?, ?, ?)',
+          id, proj.at, clean(proj.doc.title ?? (live && live.title) ?? '').slice(0, 120), live ? live.lqip : null, JSON.stringify(proj.doc));
+        this.set('project', { ...proj, draft: id, draftRev: 1 });
+      }
+      this.set('draftsInit', true);
+    });
+  }
+
+  listDrafts() {
+    this.adoptProject();
+    const drafts = this.sql.exec('SELECT id, rev, at, title, preview, doc FROM drafts ORDER BY at DESC').toArray().map(r => {
+      let images = [];
+      try { images = Object.keys(JSON.parse(r.doc).images || {}); } catch { /* skip */ }
+      return { id: r.id, rev: r.rev, at: r.at, title: r.title, preview: r.preview, images };
+    });
+    const p = this.get('project');
+    return json({ drafts, live: p ? { id: p.id, at: p.at, draft: p.draft || null, draftRev: p.draftRev ?? null } : null });
+  }
+
+  getDraft(id) {
+    const r = this.one('SELECT id, rev, at, title, doc FROM drafts WHERE id = ?', id);
+    return r ? json({ id: r.id, rev: r.rev, at: r.at, title: r.title, doc: JSON.parse(r.doc) }) : json({ error: 'not found' }, 404);
+  }
+
+  async putDraft(req, id) {
+    const b = await readJSON(req, MAX_DRAFT);
+    if (!b || !Number.isSafeInteger(b.base) || b.base < 0) return json({ error: 'bad request' }, 400);
+    const doc = b.doc;
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc) || !doc.images || typeof doc.images !== 'object') return json({ error: 'bad doc' }, 400);
+    const photos = Object.keys(doc.images);
+    if (photos.length > 2000 || !photos.every(p => HASH.test(p))) return json({ error: 'bad photo ids' }, 400);
+    const preview = typeof b.preview === 'string' && b.preview.length <= 120000 && PREVIEW.test(b.preview) ? b.preview : null;
+    const missing = photos.filter(p => !this.has('src', p));
+    if (missing.length) return json({ error: 'missing', missing }, 409);
+    const text = JSON.stringify(doc), title = clean(doc.title ?? '').slice(0, 120), now = Date.now();
+    const cur = this.one('SELECT rev, at, doc FROM drafts WHERE id = ?', id);
+    if (cur && cur.doc === text) {          // nothing new: maybe a fresher preview
+      if (preview) this.sql.exec('UPDATE drafts SET preview = ? WHERE id = ?', preview, id);
+      return json({ rev: cur.rev, at: cur.at });
+    }
+    if (b.base === 0) {
+      if (cur) return json({ error: 'exists', rev: cur.rev }, 409);
+      this.sql.exec('INSERT INTO drafts(id, rev, at, title, preview, doc) VALUES(?, 1, ?, ?, ?, ?)', id, now, title, preview, text);
+      return json({ rev: 1, at: now }, 201);
+    }
+    if (!cur) return json({ error: 'not found' }, 404);
+    if (cur.rev !== b.base) return json({ error: 'changed elsewhere', rev: cur.rev, at: cur.at }, 409);
+    this.sql.exec('UPDATE drafts SET rev = rev + 1, at = ?, title = ?, doc = ?, preview = COALESCE(?, preview) WHERE id = ?', now, title, text, preview, id);
+    return json({ rev: cur.rev + 1, at: now });
+  }
+
+  dropDraft(id) {
+    if (!this.one('SELECT 1 FROM drafts WHERE id = ?', id)) return json({ error: 'not found' }, 404);
+    this.sql.exec('DELETE FROM drafts WHERE id = ?', id);
+    this.sweepPhotos();
+    return json({ ok: true });
   }
 
   // Only reachable through the Worker below, which has already checked the key
@@ -226,6 +325,14 @@ export class Collage extends DurableObject {
       return json({ missing: ids.filter(id => !this.has('src', id)) });
     }
     if (p === '/publish' && m === 'PUT') return this.publish(req);
+    if (p === '/drafts' && m === 'GET') return this.listDrafts();
+    const d = /^\/drafts\/([A-Za-z0-9_-]{8,40})$/.exec(p);
+    if (d) {
+      if (m === 'GET') return this.getDraft(d[1]);
+      if (m === 'PUT') return this.putDraft(req, d[1]);
+      if (m === 'DELETE') return this.dropDraft(d[1]);
+      return json({ error: 'method not allowed' }, 405);
+    }
     return json({ error: 'not found' }, 404);
   }
 }

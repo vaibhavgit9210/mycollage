@@ -111,5 +111,53 @@ check('gc: previous (2) renders kept', req('GET', '/r/' + r2['preview'][1]['id']
 check('unknown route 404', req('GET', '/nope')[0] == 404)
 s, h, b = req('OPTIONS', '/publish', key=None, headers={'Origin': 'http://localhost:5500', 'Access-Control-Request-Method': 'PUT'})
 check('preflight', s == 204 and h.get('Access-Control-Allow-Origin') == 'http://localhost:5500', (s, h))
+
+# drafts: shared by every device with the key
+s, h, b = req('GET', '/drafts')
+d0 = json.loads(b)
+check('drafts: the live project became draft #1', s == 200 and len(d0['drafts']) == 1 and d0['live']['draft'] == d0['drafts'][0]['id']
+      and d0['live']['draftRev'] == 1 and d0['drafts'][0]['images'] == [H(big)], d0)
+check('drafts need the key', req('GET', '/drafts', key=None)[0] == 401)
+check('drafts: listing twice adds nothing', len(json.loads(req('GET', '/drafts')[2])['drafts']) == 1)
+other = fake_jpeg(50_000, b'other')
+dA = {'v': 1, 'title': 'Beach', 'images': {H(other): {'w': 3, 'h': 3}}, 'mode': 'grid'}
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 0, 'doc': dA})
+check('draft with a photo not uploaded yet 409 missing', s == 409 and json.loads(b)['missing'] == [H(other)], b)
+req('PUT', '/src/' + H(other), other, ctype='image/jpeg')
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 0, 'doc': dA, 'preview': lqip})
+check('create draft', s == 201 and json.loads(b)['rev'] == 1, b)
+check('create it again 409', req('PUT', '/drafts/beach0001', {'base': 0, 'doc': {**dA, 'bg': '#000'}})[0] == 409)
+s, h, b = req('GET', '/drafts/beach0001')
+check('read draft back', s == 200 and json.loads(b)['doc'] == dA and json.loads(b)['title'] == 'Beach', b[:200])
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 1, 'doc': dA, 'preview': lqip})
+check('same doc again keeps the rev', s == 200 and json.loads(b)['rev'] == 1, b)
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 1, 'doc': {**dA, 'bg': '#111'}})
+check('save at the current rev', s == 200 and json.loads(b)['rev'] == 2, b)
+s, h, b = req('PUT', '/drafts/beach0001', {'base': 1, 'doc': {**dA, 'bg': '#222'}})
+check('save from a stale rev 409 with the current rev', s == 409 and json.loads(b)['rev'] == 2, b)
+check('bad draft id 404', req('GET', '/drafts/x')[0] == 404)
+check('bad doc 400', req('PUT', '/drafts/beach0002', {'base': 0, 'doc': [1]})[0] == 400)
+check('bad preview ignored', req('PUT', '/drafts/beach0002', {'base': 0, 'doc': dA, 'preview': 'javascript:1'})[0] == 201
+      and next(d for d in json.loads(req('GET', '/drafts')[2])['drafts'] if d['id'] == 'beach0002')['preview'] is None)
+# publish a draft: the live record knows which; photos other drafts use survive the publish
+r4 = renders('four')
+for k, (data, meta) in r4.items(): req('PUT', '/r/' + meta['id'], data, ctype='image/jpeg')
+s, h, b = req('PUT', '/publish', {'title': 'Beach', 'W': 1000, 'H': 1000, 'lqip': lqip, 'doc': {**dA, 'bg': '#111'},
+                                  'draft': 'beach0001', 'draftRev': 2, **{k: v[1] for k, v in r4.items()}})
+check('publish a draft', s == 200, b)
+d1 = json.loads(req('GET', '/drafts')[2])
+check('live points at the published draft', d1['live']['draft'] == 'beach0001' and d1['live']['draftRev'] == 2, d1['live'])
+check('photos used by other drafts survive a publish', json.loads(req('POST', '/have', {'ids': [H(big), H(other)]})[2])['missing'] == [])
+check('live project not public', 'draft' not in json.loads(req('GET', '/live', key=None)[2]))
+# delete: a photo nothing uses any more is swept
+check('delete draft #1', req('DELETE', '/drafts/' + d0['drafts'][0]['id'])[0] == 200)
+check('its only photo is gone', json.loads(req('POST', '/have', {'ids': [H(big), H(other)]})[2])['missing'] == [H(big)])
+check('delete again 404', req('DELETE', '/drafts/' + d0['drafts'][0]['id'])[0] == 404)
+check('delete twice-used photo kept', req('DELETE', '/drafts/beach0002')[0] == 200
+      and json.loads(req('POST', '/have', {'ids': [H(other)]})[2])['missing'] == [])
+check('saving a deleted draft 404', req('PUT', '/drafts/beach0002', {'base': 1, 'doc': dA})[0] == 404)
+s, h, b = req('OPTIONS', '/drafts/beach0001', key=None, headers={'Origin': 'https://vaibhavkumar.is-a.dev', 'Access-Control-Request-Method': 'DELETE'})
+check('preflight allows DELETE', s == 204 and 'DELETE' in h.get('Access-Control-Allow-Methods', ''), (s, h))
+
 print('\n%d failure(s)' % fails)
 sys.exit(1 if fails else 0)

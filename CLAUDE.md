@@ -35,10 +35,24 @@ push BOTH `main` and `main:gh-pages`). The worker deploys separately: `cd worker
   every frame during drags.
 - History = JSON snapshots (`commit()` after each finished action). Slider `input` mutates + `frame()`,
   slider `change` commits. Never rebuild the props panel on `input` (it would kill the slider being dragged).
-- Local state: IndexedDB `mycollage` (`blobs`, `thumbs`, `state`). Unused blobs are only deleted at boot,
-  because Undo can bring a removed photo back within a session.
-- "Dirty" (yellow dot on Deploy) = `JSON.stringify(doc) !== deployed.json`.
-- `loadLive()` swaps the doc in only after its photos are in IndexedDB, then records `deployed`.
+- **Drafts live on the server** (worker table `drafts`): `draft` = `{id, rev, at}` of the open one,
+  `synced` = its JSON as the server has it, `live` = `{id, at, draft, draftRev}`. `save()` writes the
+  device cache (IndexedDB `state/cur` = `{id, rev, doc, synced}`) and schedules `syncDraft()` 1.5 s later:
+  upload missing photos (`/have` + `/src`), then `PUT /drafts/<id>` with `base: rev`. A 409 rev means
+  another device saved it: `conflictCopy()` keeps this version as "<title> (this device)" and opens theirs.
+  A 409 missing re-uploads; a 404 (deleted elsewhere while open) puts it back. Syncs wait while a pointer
+  is down (`pointers.size`), unless forced.
+- Saving the same doc again doesn't bump the rev (it may refresh the list preview), so "edited since
+  deploy" stays exact: Deploy is dirty when `live.draft !== draft.id`, or the doc differs from `synced`, or
+  `draft.rev !== live.draftRev`. Previews (360 px JPEG data URLs) ride along at most every 20 s, and always
+  on `syncDraft(true)` (leaving a draft, opening the sheet, deploying).
+- Boot order: cache → `GET /drafts` (offline: keep editing the cache) → move a pre-drafts device's
+  `state/doc` across (`adoptLegacy`, skipped when it equals the live draft) → open the cached draft, else the
+  last one opened here (`localStorage mycollage.draft`), else the live one, else the newest. Unsynced cached
+  edits resume (`resumeCached`); if the server moved on meanwhile and the content differs, both are kept.
+- Local state: IndexedDB `mycollage` (`blobs`, `thumbs`, `state`). Cached photos no draft uses are only
+  deleted at boot, because Undo can bring a removed photo back within a session.
+- `openDraft()` swaps the doc in only after its photos are in IndexedDB.
 
 ## Worker gotchas
 
@@ -46,12 +60,21 @@ push BOTH `main` and `main:gh-pages`). The worker deploys separately: `cd worker
 - Always read or drain a request body before answering (see `drain()`): answering early leaves the upload
   half-read and `wrangler dev` then breaks the next request.
 - `/publish` refuses (409) unless every render and every photo in `doc.images` is stored; afterwards it
-  deletes renders older than the previous deploy and photos no longer in `doc.images`.
+  deletes renders older than the previous deploy and photos that neither it nor any draft uses
+  (`photosInUse`). Deleting a draft sweeps the same way. `/publish` also records `{draft, draftRev}` in the
+  studio-only `project` (never in the public `/live`).
+- The first `GET /drafts` turns a pre-drafts live project into draft #1 (`adoptProject`, once, flag
+  `draftsInit` in kv).
 - Cloudflare's edge answers `Python-urllib` user agents with error 1010: scripts must send a browser UA.
 - `tests/api_test.py` publishes throwaway collages, so it asserts a localhost base. Never point it at production.
 
 ## Testing
 
 `tests/run.sh` (see README). Headless traps: puppeteer 25 needs `mouse.click(x, y, {count: 2})` for a real
-double-click, and relaunching a Chrome profile that once had two tabs open can hang at startup, so the
-runner wipes profiles and every suite uses its own. t5 deploys; t5c and t3b rely on something being live.
+double-click, and a reused profile can come up on `chrome://profile-picker` (its Local State says
+`picker_shown`), where puppeteer would wait forever for a first tab: `lib.launch()` passes
+`waitForInitialPage: false` and suites open their own page. The runner still wipes profiles.
+Drafts are shared server state, so suites see each other's work: a fresh profile opens the live (or newest)
+draft, not a blank one. t4 starts its own draft, t5 wipes devB before its "fresh device" step, t8 deploys
+the first draft again at the end because t3b and t6 expect it live, and t3 centres its item first (scatter
+is random and used to leave handles under a panel). Order: t5 deploys; t5c, t8, t3b, t6 need something live.

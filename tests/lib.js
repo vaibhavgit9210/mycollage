@@ -25,7 +25,9 @@ function check(name, cond, extra) {
 // Reusing a profile that once had two tabs open can hang Chrome's startup, so every
 // suite uses its own fresh profile (run.sh wipes them).
 async function launch(profile, viewport = {width: 1440, height: 900, deviceScaleFactor: 1}) {
-  return puppeteer.launch({executablePath: CHROME, headless: true, defaultViewport: viewport,
+  // waitForInitialPage off: a reused profile can come up on chrome://profile-picker instead of a tab
+  // (Local State picker_shown), and puppeteer would wait for that first tab forever. Suites open their own.
+  return puppeteer.launch({executablePath: CHROME, headless: true, defaultViewport: viewport, waitForInitialPage: false,
     args: ['--window-size=' + viewport.width + ',' + viewport.height, '--hide-scrollbars'], userDataDir: SP + '/prof-' + profile});
 }
 function wire(page, tag = '') {

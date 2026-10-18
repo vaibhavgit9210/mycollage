@@ -33,13 +33,22 @@ front / forward / backward / to back, frame (none, border, polaroid) with width 
 opacity, flip, duplicate, crop zoom, and **Style all**. **Scatter** throws every photo down at random,
 tilted and overlapping.
 
-Both modes: 8 canvas ratios, background color, undo/redo (`⌘Z` / `⇧⌘Z`), autosave on the device, and
-photos can be dropped, pasted or picked.
+Both modes: 8 canvas ratios, background color, undo/redo (`⌘Z` / `⇧⌘Z`), and photos can be dropped,
+pasted or picked.
 
-**Deploy** renders the collage to a 3200 px JPEG (plus 1600 px and 1200 px copies and a tiny placeholder),
-shows the exact image first, then uploads it. It also saves the editable project, so a new device opening
-the studio starts from what's live, and a device whose draft is behind the live version gets a "Load it"
-banner instead of a silent overwrite.
+**Drafts**: work on as many collages as you like. Every draft (and the photos it uses) is saved on the
+server a moment after each change, so any device with the studio key sees the same list and picks up where
+the last one left off; a dot next to the title says Saved / Saving / Offline. The **Drafts** button (on
+phones: ⋯ → All drafts) shows them as preview cards, tagged **Live** for the one on the public page and
+**Open** for the one you're editing, with New draft, Duplicate and Delete. A device opens the draft it had
+open last, or the live one the first time. If two devices change the same draft at once, nothing is
+overwritten: the later save is kept as a separate "(this device)" draft. Each device also keeps a copy of
+the open draft, so going offline or closing the tab mid-save loses nothing.
+
+**Deploy** publishes the draft that's open: it renders the collage to a 3200 px JPEG (plus 1600 px and
+1200 px copies and a tiny placeholder), shows the exact image first (and which live collage it replaces),
+then uploads it. The Deploy button gets a dot when the open draft isn't the live one, or has changed since
+it went live. *Open the live collage* in the ⋯ menu jumps to the live draft.
 
 ## How it's built
 
@@ -49,7 +58,8 @@ banner instead of a silent overwrite.
   https://mycollage.vaibhavpro9210.workers.dev.
   - Public: `GET /live`, `GET /r/<sha256>` (renders), `GET /og.jpg`.
   - Studio, with `Authorization: Bearer <key>`: `GET /auth`, `POST /have`, `PUT /src/<sha256>`,
-    `PUT /r/<sha256>`, `PUT /publish`, `GET /project`.
+    `PUT /r/<sha256>`, `PUT /publish`, `GET /project`, and drafts: `GET /drafts`,
+    `GET|PUT|DELETE /drafts/<id>` (saves carry the rev they started from; a stale one gets 409).
   - Images are stored by SHA-256 (checked on upload) in 1 MiB rows, since one SQLite value caps at 2 MB.
     Source photos are never public: the public page only ever gets the flattened render, so whatever a
     crop hides stays hidden.
@@ -66,10 +76,11 @@ baked in, PNG kept only when the photo really has transparency.
 ## Testing
 
 `tests/run.sh` starts `wrangler dev` (key `dev-local-key` from `worker/.dev.vars`) and a static server,
-generates fixture photos (needs Pillow), then runs the API suite and ten puppeteer suites in real Chrome:
+generates fixture photos (needs Pillow), then runs the API suite and eleven puppeteer suites in real Chrome:
 grid splits, gutters, swaps and crops; freeform transforms; a pixel diff of the editor against the exported
-image in both modes; deploy; the public page (auto-hide, download, full screen); loading on a second
-device; the phone layout and pinch. Screenshots land in `$MC_WORK/shots`.
+image in both modes; deploy; the public page (auto-hide, download, full screen); a second device opening the
+shared draft; drafts (new, switch, deploy the selected one, two devices editing at once, delete, a device's
+old single draft moving in); the phone layout and pinch. Screenshots land in `$MC_WORK/shots`.
 
 Local pages take `?api=http://localhost:8787` (only localhost is accepted, so a crafted link can't send the
 key anywhere else), and the studio exposes test hooks on `window.__studio`.

@@ -56,6 +56,35 @@
   #deployBtn{position:relative}
   #deployBtn .dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#ffd166;box-shadow:0 0 0 2px var(--panel);display:none}
   #deployBtn.dirty .dot{display:block}
+  #draftsCount{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--raise2);font-size:11px;display:inline-grid;place-items:center}
+  #draftsCount:empty{display:none}
+  .sync{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px;white-space:nowrap}
+  .sync i{width:7px;height:7px;border-radius:50%;background:transparent}
+  .sync.saved i{background:var(--ok)}
+  .sync.saving i{background:#ffd166}
+  .sync.offline i,.sync.error i{background:var(--danger)}
+  .sync.offline,.sync.error{color:var(--danger)}
+
+  /* ---------- drafts sheet ---------- */
+  .sheet.wide{width:min(820px,100%)}
+  .dhead{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .dhead h2{margin:0}
+  .dsub{margin:0 0 14px!important}
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .dgrid>.spin{margin:30px auto}
+  .dcard{position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid var(--line2);border-radius:12px;background:var(--bg);overflow:hidden}
+  .dcard.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .dprev{position:relative;display:grid;place-items:center;aspect-ratio:4/3;min-height:0;overflow:hidden;padding:10px;border:0;background:var(--stage);cursor:pointer}
+  .dprev:hover{background:#18181c}
+  .dprev img{position:absolute;inset:10px;width:calc(100% - 20px);height:calc(100% - 20px);object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.45))}
+  .dprev span{color:var(--dim);font-size:12px}
+  .dinfo{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px 12px 0}
+  .dinfo b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dinfo small{color:var(--muted)}
+  .dtags{position:absolute;top:8px;left:8px;display:flex;gap:6px}
+  .tag{padding:2px 8px;border:1px solid var(--line2);border-radius:999px;background:rgba(14,14,16,.88);font-size:11px;font-weight:650}
+  .tag.live{color:var(--ok);border-color:rgba(61,220,151,.45)}
+  .dacts{display:flex;justify-content:flex-end;gap:4px;padding:6px 8px 8px}
 
   /* ---------- layout ---------- */
   .app{flex:1;min-height:0;display:grid;grid-template-columns:236px minmax(0,1fr) 284px}
@@ -115,7 +144,6 @@
   .zoombar{position:absolute;left:50%;bottom:16px;z-index:5;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border:1px solid var(--line2);border-radius:12px;background:rgba(24,24,28,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 30px rgba(0,0,0,.45)}
   .zoombar input{width:150px}
   .zoombar output{width:40px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .banner{position:absolute;top:12px;left:50%;z-index:6;transform:translateX(-50%);display:flex;align-items:center;gap:8px;width:max-content;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border:1px solid var(--line2);border-radius:12px;background:rgba(24,24,28,.94);box-shadow:0 10px 30px rgba(0,0,0,.45)}
   body.filedrag .stage::after{content:"Drop photos";position:absolute;inset:10px;z-index:4;border:2px dashed var(--accent);border-radius:16px;display:flex;align-items:flex-start;justify-content:center;padding-top:18px;font-weight:650;color:var(--accent2);pointer-events:none}
   .dghost{position:fixed;left:0;top:0;z-index:80;width:84px;height:84px;object-fit:cover;border-radius:12px;opacity:.94;pointer-events:none;box-shadow:0 14px 34px rgba(0,0,0,.55),0 0 0 2px #fff}
   body.dragging,body.dragging *{cursor:grabbing!important}
@@ -200,8 +228,9 @@
     body{height:auto;min-height:100%;overflow:auto}
     .top{height:auto;flex-wrap:wrap;gap:8px;padding:8px 10px}
     .top>*{order:2}
-    .brand,.title,#deployBtn{order:0}
-    .brand b,.brand span,#viewLive .lbl{display:none}
+    .brand,.title,.sync,#deployBtn{order:0}
+    .brand b,.brand span,#viewLive .lbl,.sync span{display:none}
+    #draftsBtn{display:none}             /* phones reach the drafts from the ⋯ menu */
     .title{flex:1;width:auto}
     .spacer{order:1;flex-basis:100%;height:0}
     .seg{margin-right:auto}
@@ -220,7 +249,9 @@
 
 <header class="top">
   <div class="brand"><i></i><b>Collage</b> <span>studio</span></div>
+  <button class="btn" id="draftsBtn" type="button" title="All drafts"><span class="lbl">Drafts</span><b id="draftsCount"></b></button>
   <input id="title" class="title" placeholder="Untitled collage" maxlength="80" spellcheck="false" aria-label="Collage title">
+  <span class="sync" id="sync"><i></i><span></span></span>
   <div class="seg" id="modeSeg" role="group" aria-label="Layout mode">
     <button type="button" data-mode="grid" aria-pressed="true"></button>
     <button type="button" data-mode="free" aria-pressed="false"></button>
@@ -251,7 +282,6 @@
       <button class="btn sm" id="zoomReset" type="button">Reset</button>
       <button class="btn primary sm" id="zoomDone" type="button">Done</button>
     </div>
-    <div class="banner" id="banner" hidden></div>
   </section>
   <aside class="props" id="props"></aside>
 </main>
@@ -322,6 +352,7 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/>',
   eraser: '<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
   lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  layers: '<path d="M12.8 2.2a2 2 0 0 0-1.6 0L2.6 6.1a1 1 0 0 0 0 1.8l8.6 3.9a2 2 0 0 0 1.6 0l8.6-3.9a1 1 0 0 0 0-1.8z"/><path d="m22 17.6-9.2 4.2a2 2 0 0 1-1.6 0L2 17.6"/><path d="m22 12.6-9.2 4.2a2 2 0 0 1-1.6 0L2 12.6"/>',
 };
 const icon = (n, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 function svg(n, s) { const t = document.createElement('template'); t.innerHTML = icon(n, s); return t.content.firstChild; }
@@ -381,7 +412,6 @@ let doc;
 let sel = null;          // {kind:'cell'|'item', id}
 let adjust = null;       // id of the cell/item whose crop is being adjusted
 let drag = null, guides = [], dropCell = null;
-let deployed = null;     // {json, id, at} of the last deploy this device made or loaded
 let key = '';
 
 function sizeFor(a) {
@@ -787,10 +817,17 @@ function restoreFrom(s) {
 }
 function undo() { if (hist.i > 0) restoreFrom(hist.stack[--hist.i]); }
 function redo() { if (hist.i < hist.stack.length - 1) restoreFrom(hist.stack[++hist.i]); }
+// The open draft is cached on this device (state/cur) so a reload or a dropped connection
+// loses nothing, then saved to the server a moment later (syncDraft).
 function save(now) {
   clearTimeout(saveTimer);
-  const go = () => idb.put('state', 'doc', JSON.stringify(doc)).catch(() => toast("Couldn't save on this device."));
+  const go = () => {
+    const text = JSON.stringify(doc);
+    return idb.put('state', 'cur', {id: draft && draft.id, rev: draft ? draft.rev : 0, doc: text, synced: text === synced})
+      .catch(() => toast("Couldn't save on this device."));
+  };
   if (now) go(); else saveTimer = setTimeout(go, 300);
+  if (draft && JSON.stringify(doc) !== synced) { setSync('saving'); clearTimeout(syncT); syncT = setTimeout(syncDraft, 1500); }
 }
 
 /* ---------- rendering: artboard ---------- */
@@ -1083,9 +1120,12 @@ function syncChrome() {
   stage.classList.toggle('free', doc.mode === 'free');
   const t = $('#title');
   if (document.activeElement !== t) t.value = doc.title;
-  const dirty = !deployed || deployed.json !== JSON.stringify(doc), d = $('#deployBtn');
+  const isLive = !!(live && draft && live.draft === draft.id), d = $('#deployBtn');
+  const dirty = !isLive || JSON.stringify(doc) !== synced || draft.rev !== live.draftRev;
   d.classList.toggle('dirty', dirty);
-  d.title = !deployed ? 'Not deployed from this device yet' : dirty ? 'You have changes that are not live yet' : 'The live page matches this';
+  d.title = !live ? 'Nothing is live yet' : !isLive ? 'Another draft is live. Deploy this one to replace it.'
+    : dirty ? 'You have changes that are not live yet' : 'The live page matches this draft';
+  $('#draftsCount').textContent = drafts.length > 1 ? drafts.length : '';
 }
 
 /* ---------- interaction: artboard pointer handling ----------
@@ -1123,7 +1163,7 @@ function startPinch() {
 }
 stage.addEventListener('pointerdown', e => {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  if (e.target.closest('.mini, .zoombar, .banner')) return;
+  if (e.target.closest('.mini, .zoombar')) return;
   pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
   stage.setPointerCapture(e.pointerId);
   if (pointers.size === 2) return startPinch();
@@ -1236,7 +1276,7 @@ function endPointer(e) {
 stage.addEventListener('pointerup', endPointer);
 stage.addEventListener('pointercancel', endPointer);
 stage.addEventListener('dblclick', e => {
-  if (e.target.closest('.mini, .zoombar, .banner')) return;
+  if (e.target.closest('.mini, .zoombar')) return;
   const p = unitsAt(e);
   if (doc.mode === 'grid') {
     const c = cellAt(p);
@@ -1462,58 +1502,38 @@ async function api(path, {method = 'GET', json, body, type} = {}) {
   try { r = await fetch(API + path, {method, headers, body, cache: 'no-store'}); }
   catch { throw new Error("Can't reach the server. Check the connection and try again."); }
   if (r.status === 401) { askKey('That key was rejected. Enter the studio key again.'); throw new Error('The studio key was rejected.'); }
-  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error ? `Server said: ${j.error}` : `Server error ${r.status}`); }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw Object.assign(new Error(j.error ? `Server said: ${j.error}` : `Server error ${r.status}`), {status: r.status, data: j});
+  }
   return (r.headers.get('Content-Type') || '').includes('application/json') ? r.json() : r.blob();
 }
-async function publish(out, step) {
-  const ids = Object.keys(doc.images);
-  step('Checking photos…', .02);
+// Upload the photos the server doesn't have yet (they're content addressed).
+async function uploadPhotos(ids, step) {
+  if (!ids.length) return;
   const {missing} = await api('/have', {method: 'POST', json: {ids}});
-  const total = missing.length + 3;
-  let done = 0;
-  for (const id of missing) {
-    step(`Uploading photos ${done + 1} of ${missing.length}…`, done / total);
-    const blob = media.get(id)?.blob || await idb.get('blobs', id).catch(() => null);
-    if (!blob) throw new Error('A photo in the library is missing on this device. Remove it and deploy again.');
+  for (let i = 0; i < missing.length; i++) {
+    if (step) step(`Uploading photos ${i + 1} of ${missing.length}…`, .05 + .6 * i / missing.length);
+    const id = missing[i], blob = media.get(id)?.blob || await idb.get('blobs', id).catch(() => null);
+    if (!blob) throw new Error('A photo in the library is missing on this device. Remove it and try again.');
     await api('/src/' + id, {method: 'PUT', body: blob, type: blob.type});
-    done++;
   }
+}
+async function publish(out, step) {
+  step('Saving the draft…', .02);
+  if (!await syncDraft(true) || JSON.stringify(doc) !== synced) throw new Error("Couldn't save the draft first. Check the connection and try again.");
+  await uploadPhotos(Object.keys(doc.images), step);
+  let i = 0;
   for (const k of ['og', 'preview', 'full']) {
-    step('Uploading the collage…', done / total);
+    step('Uploading the collage…', .7 + .09 * i++);
     await api('/r/' + out[k].id, {method: 'PUT', body: out[k].blob, type: 'image/jpeg'});
-    done++;
   }
   step('Publishing…', .98);
-  const snap = JSON.stringify(doc), meta = k => ({id: out[k].id, w: out[k].w, h: out[k].h, bytes: out[k].bytes});
+  const meta = k => ({id: out[k].id, w: out[k].w, h: out[k].h, bytes: out[k].bytes});
   const res = await api('/publish', {method: 'PUT', json: {title: doc.title.trim(), W: doc.W, H: doc.H,
-    full: meta('full'), preview: meta('preview'), og: meta('og'), lqip: out.lqip, doc: JSON.parse(snap)}});
-  deployed = {json: snap, id: res.id, at: res.at};
-  await idb.put('state', 'deployed', deployed).catch(() => {});
+    full: meta('full'), preview: meta('preview'), og: meta('og'), lqip: out.lqip, doc: JSON.parse(synced), draft: draft.id, draftRev: draft.rev}});
+  live = {id: res.id, at: res.at, draft: draft.id, draftRev: draft.rev};
   syncChrome();
-}
-async function loadLive(silent) {
-  const t = toast('Loading the live version…', {sticky: true});
-  try {
-    const p = await api('/project');
-    if (p.none) { t.close(); if (!silent) toast('Nothing has been deployed yet.'); return; }
-    const ids = Object.keys(p.doc.images || {});
-    let i = 0;
-    for (const id of ids) {
-      if (await idb.get('blobs', id).catch(() => null)) continue;
-      t.set(`Downloading photos ${++i}…`);
-      await idb.put('blobs', id, await api('/src/' + id));
-    }
-    await loadMedia(ids);
-    doc = migrate(p.doc);                         // swap in only once its photos are ready
-    deployed = {json: JSON.stringify(doc), id: p.id, at: p.at};
-    sel = null; adjust = null;
-    resetHistory(); render();
-    await idb.put('state', 'deployed', deployed).catch(() => {});
-    save(true);
-    $('#banner').hidden = true;
-    t.close();
-    if (!silent) toast('Loaded the live version.');
-  } catch (err) { t.close(); toast(err.message); }
 }
 function ago(ts) {
   const m = Math.round((Date.now() - ts) / 60000);
@@ -1522,19 +1542,249 @@ function ago(ts) {
   if (m < 60 * 24) { const hr = Math.round(m / 60); return `${hr} hour${hr > 1 ? 's' : ''} ago`; }
   return 'on ' + new Date(ts).toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
 }
-// A fresh device starts from whatever is live. Otherwise, if something newer went live
-// from elsewhere, offer it instead of silently overwriting either side.
-async function checkRemote() {
-  let live;
-  try { live = await (await fetch(API + '/live', {cache: 'no-store'})).json(); } catch { return; }
-  if (!live || live.none) return;
-  if (!Object.keys(doc.images).length && !deployed) return loadLive(true);
-  if (deployed && deployed.id === live.id) return;
-  const b = $('#banner');
-  b.replaceChildren(h('span', {}, `A version deployed ${ago(live.at)} from another device is live.`),
-    h('button', {class: 'btn sm primary', type: 'button', onclick: () => loadLive()}, 'Load it'),
-    h('button', {class: 'btn sm ib', type: 'button', 'aria-label': 'Dismiss', onclick: () => { b.hidden = true; }}, svg('x', 14)));
-  b.hidden = false;
+
+/* ---------- drafts ----------
+   Every draft lives on the server with the photos it uses, so any device with the key sees
+   the same list and Deploy publishes whichever draft is open. Saves send the rev they started
+   from: if another device saved the same draft in between, this device's version is kept as a
+   separate draft instead of overwriting either. */
+const DRAFT_STORE = 'mycollage.draft';
+let draft = null;          // {id, rev, at}: the open draft as the server last had it
+let live = null;           // {id, at, draft, draftRev}, or null when nothing is live yet
+let drafts = [];           // the list, newest first, as last fetched
+let synced = '';           // JSON of the open draft as saved on the server
+let syncP = null, syncT = 0, syncAgain = false, syncFails = 0, previewOf = '', previewAt = 0;
+const newDraftId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
+const untitled = t => t || 'Untitled collage';
+function setSync(k) {
+  const el = $('#sync');
+  el.className = 'sync ' + k;
+  el.lastChild.textContent = {saved: 'Saved', saving: 'Saving…', offline: 'Offline, will retry', error: 'Not saved'}[k] || '';
+  el.title = k === 'offline' ? "Can't reach the server. Changes are kept on this device and saved when it's back." : '';
+}
+async function refreshDrafts() {
+  const r = await api('/drafts');
+  drafts = r.drafts; live = r.live;
+  syncChrome();
+  return r;
+}
+// Save the open draft to the server. force = also refresh its preview in the Drafts list.
+function syncDraft(force = false) {
+  clearTimeout(syncT);
+  if (!draft) return Promise.resolve(true);
+  if (!force && pointers.size) { syncT = setTimeout(syncDraft, 800); return Promise.resolve(false); }   // not mid-gesture
+  if (syncP) { syncAgain = true; return syncP; }
+  const json = JSON.stringify(doc);
+  const wantPreview = previewOf !== json && (force || Date.now() - previewAt > 20000);
+  if (json === synced && !wantPreview) { setSync('saved'); return Promise.resolve(true); }
+  const id = draft.id;
+  syncP = (async () => {
+    try {
+      if (json !== synced) setSync('saving');
+      const snap = JSON.parse(json);
+      await uploadPhotos(Object.keys(snap.images));
+      let preview;
+      if (wantPreview) preview = await renderCollage(360).then(cv => cv.toDataURL('image/jpeg', .72)).catch(() => undefined);
+      const r = await api('/drafts/' + id, {method: 'PUT', json: {base: draft.rev, doc: snap, preview}});
+      if (!draft || draft.id !== id) return true;
+      draft.rev = r.rev; draft.at = r.at; synced = json; syncFails = 0;
+      if (preview) { previewOf = json; previewAt = Date.now(); }
+      const e = drafts.find(d => d.id === id);
+      if (e) Object.assign(e, {rev: r.rev, at: r.at, title: snap.title || '', images: Object.keys(snap.images)}, preview ? {preview} : {});
+      else drafts.unshift({id, rev: r.rev, at: r.at, title: snap.title || '', preview: preview || null, images: Object.keys(snap.images)});
+      if (JSON.stringify(doc) === json) setSync('saved');
+      save(true);
+      syncChrome();
+      return true;
+    } catch (err) {
+      if (!draft || draft.id !== id) return false;
+      if (err.status === 409 && err.data && err.data.missing) { syncT = setTimeout(syncDraft, 300); return false; }   // photos swept meanwhile: re-upload
+      if (err.status === 409) return conflictCopy(json);
+      if (err.status === 404) {   // deleted on another device while open here: being edited, so put it back
+        draft.rev = 0; syncT = setTimeout(syncDraft, 300);
+        toast('This draft had been deleted on another device. It was saved again because you are editing it.');
+        return false;
+      }
+      setSync(err.status ? 'error' : 'offline');
+      syncFails++;
+      syncT = setTimeout(syncDraft, Math.min(30000, 2000 * 2 ** Math.min(syncFails, 4)));
+      return false;
+    } finally {
+      syncP = null;
+      if (syncAgain) { syncAgain = false; if (draft && JSON.stringify(doc) !== synced) syncT = setTimeout(syncDraft, 300); }
+    }
+  })();
+  return syncP;
+}
+// Another device saved this draft since it was opened here: keep this version as its own draft.
+async function conflictCopy(json) {
+  const mine = JSON.parse(json), id = draft.id;
+  mine.title = untitled(mine.title) + ' (this device)';
+  try {
+    await api('/drafts/' + newDraftId(), {method: 'PUT', json: {base: 0, doc: mine}});
+    await refreshDrafts();
+    await openDraft(id, {flush: false, quiet: true});
+    toast(`This draft was changed on another device, so that version is open now. Yours is kept as “${mine.title}”.`);
+    return true;
+  } catch (err) { setSync('error'); toast(err.message); return false; }
+}
+async function leaveDraft() {
+  if (!draft) return true;
+  await syncDraft(true);
+  if (JSON.stringify(doc) === synced) return true;
+  toast("This draft isn't saved yet (no connection?). Try again in a moment.");
+  return false;
+}
+function showDraft(d, id, rev, at) {
+  doc = migrate(d);                         // swap in only once its photos are ready
+  draft = {id, rev, at};
+  synced = JSON.stringify(doc); previewOf = ''; previewAt = 0;
+  sel = null; adjust = null;
+  resetHistory(); render();
+  localStorage.setItem(DRAFT_STORE, id);
+  save(true); setSync('saved'); syncChrome();
+}
+async function openDraft(id, {flush = true, quiet = false} = {}) {
+  if (flush && draft && draft.id !== id && !await leaveDraft()) return false;
+  const t = quiet ? null : toast('Opening…', {sticky: true});
+  try {
+    const d = await api('/drafts/' + id);
+    const ids = Object.keys(d.doc.images || {});
+    let n = 0;
+    for (const pid of ids) {
+      if (media.has(pid) || await idb.get('blobs', pid).catch(() => null)) continue;
+      if (t) t.set(`Downloading photos ${++n}…`);
+      await idb.put('blobs', pid, await api('/src/' + pid));
+    }
+    await loadMedia(ids);
+    showDraft(d.doc, d.id, d.rev, d.at);
+    if (t) t.close();
+    return true;
+  } catch (err) { if (t) t.close(); toast(err.message); return false; }
+}
+// A new draft: blank, or a copy of `from` (a doc whose photos are on the server or here).
+async function newDraft(from = null, suffix = ' copy') {
+  if (!await leaveDraft()) return false;
+  const d = from ? JSON.parse(JSON.stringify(from)) : blankDoc();
+  if (from) d.title = (untitled(from.title) + suffix).slice(0, 80);
+  const id = newDraftId(), t = toast(from ? 'Copying…' : 'Starting a new draft…', {sticky: true});
+  try {
+    await uploadPhotos(Object.keys(d.images));
+    const r = await api('/drafts/' + id, {method: 'PUT', json: {base: 0, doc: d}});
+    await loadMedia(Object.keys(d.images));
+    drafts.unshift({id, rev: r.rev, at: r.at, title: d.title || '', preview: null, images: Object.keys(d.images)});
+    showDraft(d, id, r.rev, r.at);
+    t.close();
+    return true;
+  } catch (err) { t.close(); toast(err.message); return false; }
+}
+async function deleteDraft(id) {
+  const e = drafts.find(d => d.id === id);
+  if (!e) return false;
+  const isLive = live && live.draft === id;
+  if (!await confirmBox(`Delete “${untitled(e.title)}”?`, isLive
+    ? 'This is the live collage. The public page keeps showing it until you deploy another draft, but the draft itself goes from every device.'
+    : 'It goes from every device. Photos that only it uses are deleted too.', 'Delete')) return false;
+  const open = draft && draft.id === id;
+  if (open) { clearTimeout(syncT); draft = null; }       // don't let a pending save bring it back
+  try { await api('/drafts/' + id, {method: 'DELETE'}); }
+  catch (err) { if (err.status !== 404) { toast(err.message); if (open) draft = {id, rev: e.rev, at: e.at}; return false; } }
+  drafts = drafts.filter(d => d.id !== id);
+  if (open) { if (drafts.length) await openDraft(drafts[0].id, {flush: false}); else await newDraft(); }
+  syncChrome();
+  toast(`Deleted “${untitled(e.title)}”.`);
+  return true;
+}
+async function openLive() {
+  try { await refreshDrafts(); } catch (err) { return toast(err.message); }
+  if (!live) return toast('Nothing has been deployed yet.');
+  if (live.draft && drafts.some(d => d.id === live.draft)) {
+    if (draft && draft.id === live.draft) return toast('The live draft is the one open.');
+    return openDraft(live.draft);
+  }
+  try { const p = await api('/project'); await newDraft(p.doc, ' (live)'); } catch (err) { toast(err.message); }   // its draft was deleted
+}
+function openDraftsSheet() {
+  const grid = h('div', {class: 'dgrid'}, h('div', {class: 'spin'}));
+  modal(h('div', {},
+    h('div', {class: 'dhead'}, h('h2', {}, 'Drafts'), h('span', {class: 'spacer'}),
+      button('plus', 'New draft', async () => { closeModal(); await newDraft(); }, 'primary sm')),
+    h('p', {class: 'dsub'}, 'Saved on the server, so every device with the studio key sees these. Deploy publishes the draft that is open.'),
+    grid));
+  $('#sheet').classList.add('wide');
+  const prev = modalClose;
+  modalClose = () => { $('#sheet').classList.remove('wide'); if (prev) prev(); };
+  (async () => {
+    await syncDraft(true);                  // the open draft's card shows its latest look
+    try { await refreshDrafts(); } catch (err) { grid.replaceChildren(h('p', {}, err.message)); return; }
+    if (!grid.isConnected) return;
+    grid.replaceChildren(...drafts.map(e => {
+      const cur = !!draft && e.id === draft.id, isLive = !!live && live.draft === e.id;
+      const go = async () => { closeModal(); if (!cur) await openDraft(e.id); };
+      return h('div', {class: 'dcard' + (cur ? ' cur' : ''), 'data-id': e.id},
+        h('button', {class: 'dprev', type: 'button', onclick: go, 'aria-label': 'Open ' + untitled(e.title)},
+          e.preview ? h('img', {src: e.preview, alt: ''}) : h('span', {}, 'No preview yet')),
+        h('div', {class: 'dtags'},
+          isLive ? h('span', {class: 'tag live'}, e.rev === live.draftRev ? 'Live' : 'Live · edited since') : null,
+          cur ? h('span', {class: 'tag'}, 'Open') : null),
+        h('div', {class: 'dinfo'}, h('b', {}, untitled(e.title)),
+          h('small', {}, `Edited ${ago(e.at)} · ${e.images.length} photo${e.images.length === 1 ? '' : 's'}`)),
+        h('div', {class: 'dacts'},
+          ibutton('copy', 'Duplicate', async () => { closeModal(); try { await newDraft(cur ? doc : (await api('/drafts/' + e.id)).doc); } catch (err) { toast(err.message); } }),
+          ibutton('trash', 'Delete', async () => { closeModal(); await deleteDraft(e.id); })));
+    }));
+  })();
+}
+// Before drafts lived on the server, each device kept one draft: bring this device's across
+// (unless it's just the live collage, which the server already turned into a draft).
+async function adoptLegacy(text) {
+  try {
+    const d = migrate(JSON.parse(text)), ids = Object.keys(d.images);
+    if (ids.length) {
+      let same = false;
+      if (live && live.draft) same = await api('/drafts/' + live.draft).then(x => JSON.stringify(migrate(x.doc)) === JSON.stringify(d), () => false);
+      if (!same) {
+        await loadMedia(ids);
+        await uploadPhotos(ids);
+        if (live) d.title = (untitled(d.title) + ' (from this device)').slice(0, 80);
+        const id = newDraftId();
+        await api('/drafts/' + id, {method: 'PUT', json: {base: 0, doc: d}});
+        localStorage.setItem(DRAFT_STORE, id);
+        await refreshDrafts();
+      }
+    }
+    await idb.del('state', 'doc'); await idb.del('state', 'deployed');
+  } catch (err) { toast("Couldn't move this device's draft to the server yet: " + err.message); }
+}
+// Edits made here that never reached the server (offline, or the tab closed too soon).
+async function resumeCached(c) {
+  const e = drafts.find(d => d.id === c.id), local = migrate(JSON.parse(c.doc));
+  await loadMedia(Object.keys(local.images));
+  if (e.rev === c.rev) {                     // nothing newer elsewhere: carry on and save them
+    doc = local; draft = {id: e.id, rev: e.rev, at: e.at}; synced = '';
+    resetHistory(); render();
+    localStorage.setItem(DRAFT_STORE, e.id);
+    syncDraft();
+    return;
+  }
+  await openDraft(e.id, {flush: false, quiet: true});
+  // The tab may have closed after its last save landed but before the cache noted it.
+  if (JSON.stringify(doc) === JSON.stringify(local)) return;
+  local.title = (untitled(local.title) + ' (this device)').slice(0, 80);    // changed here and elsewhere: keep both
+  try {
+    await uploadPhotos(Object.keys(local.images));
+    await api('/drafts/' + newDraftId(), {method: 'PUT', json: {base: 0, doc: local}});
+    await refreshDrafts();
+    toast(`This draft changed on another device too, so both are kept: yours is “${local.title}”.`);
+  } catch (err) { toast(err.message); }
+}
+let lastRefresh = 0;
+async function refreshFromServer() {
+  if (!draft || !$('#lock').hidden || !$('#modal').hidden || Date.now() - lastRefresh < 5000) return;
+  lastRefresh = Date.now();
+  try { await refreshDrafts(); } catch { return; }
+  const e = drafts.find(d => d.id === draft.id);
+  if (e && e.rev > draft.rev && JSON.stringify(doc) === synced && !syncP) await openDraft(draft.id, {flush: false, quiet: true});
 }
 
 /* ---------- modal, menu, toasts, key ---------- */
@@ -1575,9 +1825,8 @@ function openMenu() {
   const r = $('#moreBtn').getBoundingClientRect();
   const item = (ic, label, fn) => h('button', {type: 'button', onclick: () => { closeMenu(); fn(); }}, svg(ic), label);
   const m = h('div', {class: 'menu', role: 'menu', style: {top: r.bottom + 6 + 'px', right: Math.max(8, innerWidth - r.right) + 'px'}},
-    item('refresh', 'Load the live version', async () => {
-      if (!deployed || deployed.json === JSON.stringify(doc) || await confirmBox('Replace your draft?', 'Changes that are not live yet will be lost on this device.', 'Load live')) loadLive();
-    }),
+    item('layers', 'All drafts', openDraftsSheet),
+    item('refresh', 'Open the live collage', openLive),
     item('download', 'Download image', async () => {
       const t = toast('Rendering…', {sticky: true});
       try { saveBlob(await toBlob(await renderCollage(OUT), 'image/jpeg', .92), fileName()); } catch (err) { toast(err.message); }
@@ -1631,8 +1880,10 @@ async function openDeploy() {
   modalClose = () => URL.revokeObjectURL(url);
   prev.replaceChildren(h('img', {src: url, alt: 'What the public page will show'}));
   const empty = doc.mode === 'grid' ? cellsInOrder().filter(c => !c.photo).length : 0;
+  const other = live && draft && live.draft !== draft.id ? drafts.find(d => d.id === live.draft) : null;
   info.textContent = `${out.full.w} × ${out.full.h} px · ${(out.full.bytes / 1048576).toFixed(1)} MB JPEG`
-    + (empty ? ` · ${empty} empty cell${empty > 1 ? 's' : ''} will show the background` : '');
+    + (empty ? ` · ${empty} empty cell${empty > 1 ? 's' : ''} will show the background` : '')
+    + (other ? ` · replaces “${untitled(other.title)}” on the public page` : '');
   dl.disabled = go.disabled = false;
   dl.onclick = () => saveBlob(out.full.blob, fileName());
   go.onclick = async () => {
@@ -1679,11 +1930,15 @@ const titleIn = $('#title');
 titleIn.addEventListener('input', () => { doc.title = titleIn.value.slice(0, 80); save(); syncChrome(); });
 titleIn.addEventListener('change', commit);
 titleIn.addEventListener('keydown', e => { if (e.key === 'Enter') titleIn.blur(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { save(true); syncDraft(); } else refreshFromServer(); });
+window.addEventListener('focus', refreshFromServer);
+$('#draftsBtn').prepend(svg('layers')); $('#draftsBtn').onclick = openDraftsSheet;
 
 // Test hooks for the headless checks in the README; they only touch this page.
 window.__studio = {get doc() { return doc; }, importFiles, placePhotos, render, renderCollage, layoutGrid, splitCell,
-  deleteCell, applyTemplate, TEMPLATES, smartArrange, scatter, setMode, setAspect, select, get view() { return view; }, commit};
+  deleteCell, applyTemplate, TEMPLATES, smartArrange, scatter, setMode, setAspect, select, get view() { return view; }, commit,
+  get draft() { return draft; }, get drafts() { return drafts; }, get live() { return live; }, get synced() { return synced; },
+  newDraft, openDraft, deleteDraft, syncDraft, refreshDrafts, openDraftsSheet, openLive};
 
 (async function boot() {
   const m = /(?:^#|&)k=([^&]+)/.exec(location.hash);
@@ -1691,13 +1946,29 @@ window.__studio = {get doc() { return doc; }, importFiles, placePhotos, render, 
   key = localStorage.getItem(KEY_STORE) || '';
   $('#viewLive').href = liveURL();
   if (!key) await askKey();
-  try { const s = await idb.get('state', 'doc'); if (s) doc = migrate(JSON.parse(s)); } catch {}
-  deployed = await idb.get('state', 'deployed').catch(() => null) || null;
-  await loadMedia(Object.keys(doc.images));
-  resetHistory(); render();
-  // Drop stored photos the doc no longer uses (only on load, so Undo keeps working in-session).
-  for (const s of ['blobs', 'thumbs']) for (const id of await idb.keys(s).catch(() => [])) if (!doc.images[id]) idb.del(s, id).catch(() => {});
-  checkRemote();
+  const cache = await idb.get('state', 'cur').catch(() => null);
+  const legacy = cache ? null : await idb.get('state', 'doc').catch(() => null);
+  try { await refreshDrafts(); }
+  catch (err) {                              // offline: carry on with this device's copy
+    if (cache && cache.doc) {
+      doc = migrate(JSON.parse(cache.doc));
+      draft = cache.id ? {id: cache.id, rev: cache.rev, at: 0} : null;
+      synced = cache.synced ? JSON.stringify(doc) : '';
+      await loadMedia(Object.keys(doc.images));
+      resetHistory(); render();
+      if (draft) { setSync('offline'); syncT = setTimeout(syncDraft, 3000); }
+    } else toast(err.message);
+    return;
+  }
+  if (legacy) await adoptLegacy(legacy);
+  const has = id => !!id && drafts.some(d => d.id === id);
+  const want = [cache && cache.id, localStorage.getItem(DRAFT_STORE), live && live.draft].find(has) || (drafts[0] && drafts[0].id);
+  if (!want) await newDraft();
+  else if (cache && cache.id === want && !cache.synced) await resumeCached(cache);
+  else await openDraft(want, {flush: false, quiet: true});
+  // Drop cached photos no draft uses (only on load, so Undo keeps working in-session).
+  const keep = new Set([...drafts.flatMap(d => d.images), ...Object.keys(doc.images)]);
+  for (const s of ['blobs', 'thumbs']) for (const id of await idb.keys(s).catch(() => [])) if (!keep.has(id)) idb.del(s, id).catch(() => {});
   api('/auth').catch(() => {});
 })();
 </script>

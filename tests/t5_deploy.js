@@ -100,11 +100,12 @@ async function publicPage(browser, tag) {
   L.check('F again exits full screen', !(await pub.evaluate(() => !!document.fullscreenElement)));
   await browser.close();
 
-  // 4. device B: empty local draft -> loads the live project automatically
+  // 4. a fresh device B opens the live draft (wiped: in step 1 it opened whatever was newest then)
+  L.fs.rmSync(L.SP + '/prof-devB', {recursive: true, force: true});
   browser = await L.launch('devB');
   page = await browser.newPage();
   L.wire(page, 'devB');
-  await page.goto(L.STUDIO);
+  await page.goto(L.STUDIO + '#k=dev-local-key');
   await page.waitForFunction(() => window.__studio && Object.keys(__studio.doc.images).length === 5, {timeout: 20000});
   await L.sleep(500);
   const docB = await page.evaluate(() => JSON.stringify(__studio.doc));

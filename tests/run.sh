@@ -19,8 +19,8 @@ restart_worker
 echo "== api"; python3 "$HERE/api_test.py" | grep -E "^FAIL|failure"
 restart_worker
 rm -rf "$MC_WORK"/prof-*
-# Order matters: t5 deploys, and t5c / t3b need something live to auto-load.
-for t in t1_smoke t2_grid t3_free t4_wysiwyg t5_deploy t5c_banner t3b_knob t6_mobile t6b_topbar t7_firstrun; do
+# Order matters: t5 deploys, and t5c / t8 / t3b need something live to open.
+for t in t1_smoke t2_grid t3_free t4_wysiwyg t5_deploy t5c_shared t8_drafts t3b_knob t6_mobile t6b_topbar t7_firstrun; do
   echo "== $t"
   node "$HERE/$t.js" 2>&1 | grep -E "^(FAIL|fails)|Error|Timed out"
 done

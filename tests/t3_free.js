@@ -35,6 +35,15 @@ const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol;
   its = await items(page);
   L.check('style all copies the polaroid frame', its.every(i => i.frame === 'polaroid'));
 
+  // Scatter is random and can leave the top item hanging off the board, with its handles under a
+  // panel: put it in the open (same size ratio) so the drags below always grab their handle.
+  await page.evaluate(() => {
+    const d = __studio.doc, it = d.free.items[d.free.items.length - 1], k = Math.min(1, d.W * .4 / it.w, d.H * .4 / it.h);
+    Object.assign(it, {cx: d.W * .42, cy: d.H * .42, w: it.w * k, h: it.h * k});
+    __studio.commit(); __studio.select({kind: 'item', id: it.id}); __studio.render();
+  });
+  its = await items(page);
+
   // move
   top = its[its.length - 1];
   const k = await page.evaluate(() => __studio.view.k);
