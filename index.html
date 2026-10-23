@@ -18,7 +18,7 @@
   html,body{height:100%;margin:0}
   body{
     overflow:hidden; background:#0b0b0d; color:#f4f4f6;
-    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
   }
   [hidden]{display:none!important}
@@ -50,9 +50,9 @@
   .bar{
     position:fixed; left:50%; bottom:max(22px,env(safe-area-inset-bottom)); z-index:5;
     display:flex; align-items:center; gap:2px; padding:6px; border-radius:999px;
-    background:rgba(24,24,28,.34); border:1px solid rgba(255,255,255,.12);
-    backdrop-filter:blur(22px) saturate(170%); -webkit-backdrop-filter:blur(22px) saturate(170%);
-    box-shadow:0 12px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);
+    background:rgba(24,24,28,.34); border:0;
+    backdrop-filter:blur(24px) saturate(170%); -webkit-backdrop-filter:blur(24px) saturate(170%);
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.22),inset 0 0 0 .5px rgba(255,255,255,.1),0 12px 40px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.22);
     opacity:0; transform:translate(-50%,14px); pointer-events:none;
     transition:opacity .6s ease,transform .6s cubic-bezier(.2,.8,.2,1),background .25s ease;
   }
@@ -73,7 +73,8 @@
   .ctl svg{display:block}
   .ctl::after{
     content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 12px);
-    padding:5px 9px; border-radius:8px; background:rgba(18,18,22,.92); color:#fff;
+    padding:5px 10px; border-radius:10px; background:rgba(18,18,22,.92); color:#fff;
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.16),0 6px 18px rgba(0,0,0,.35);
     font-size:12px; white-space:nowrap; pointer-events:none;
     opacity:0; transform:translate(-50%,4px); transition:opacity .15s ease,transform .15s ease;
   }
@@ -89,15 +90,18 @@
   .note div{display:flex;flex-direction:column;align-items:center;gap:10px}
   .note h1{margin:8px 0 0;font-size:20px;font-weight:600;letter-spacing:.2px}
   .note p{margin:0;color:rgba(255,255,255,.55)}
-  .note button{margin-top:8px;height:38px;padding:0 18px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:rgba(255,255,255,.06);color:#fff;font:inherit;cursor:pointer}
-  .note button:hover{background:rgba(255,255,255,.12)}
+  .note button{margin-top:8px;height:38px;padding:0 18px;border:0;border-radius:999px;background:rgba(255,255,255,.08);box-shadow:inset 0 .5px 0 rgba(255,255,255,.2),inset 0 0 0 .5px rgba(255,255,255,.1);color:#fff;font:inherit;cursor:pointer;transition:background-color .15s,transform .1s}
+  .note button:hover{background:rgba(255,255,255,.14)}
+  .note button:active{transform:scale(.97)}
+  .note button:focus-visible{outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
   .spinner{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.12);border-top-color:rgba(255,255,255,.75);animation:spin .9s linear infinite}
 
   .toast{
     position:fixed; left:50%; top:max(18px,env(safe-area-inset-top)); z-index:6;
     display:flex; align-items:center; gap:12px; padding:9px 10px 9px 16px; border-radius:999px;
-    background:rgba(24,24,28,.78); border:1px solid rgba(255,255,255,.12);
-    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    background:rgba(24,24,28,.78); border:0;
+    backdrop-filter:blur(24px) saturate(170%); -webkit-backdrop-filter:blur(24px) saturate(170%);
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.2),inset 0 0 0 .5px rgba(255,255,255,.1),0 10px 30px rgba(0,0,0,.32);
     opacity:0; transform:translate(-50%,-8px); transition:opacity .25s ease,transform .25s ease; pointer-events:none;
   }
   .toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -106,6 +110,10 @@
 
   @media (max-width:440px){.meta span{display:none}.meta{max-width:46vw}}
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+  /* Reduce Transparency (System Settings > Accessibility > Display): solid controls, no blur */
+  @media (prefers-reduced-transparency:reduce){
+    .bar,.bar:hover,.bar:focus-within,.toast{background:#18181c;-webkit-backdrop-filter:none;backdrop-filter:none}
+  }
 </style>
 
 <div class="amb" id="amb"></div>
